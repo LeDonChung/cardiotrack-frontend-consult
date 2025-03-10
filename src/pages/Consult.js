@@ -26,13 +26,13 @@ export default function Consult() {
     const [stompClient, setStompClient] = useState(null);
     const [messageSend, setMessageSend] = useState(false);
     const [messageList, setMessageList] = useState([]);
+    const [usersOnline, setUsersOnline] = useState([]);
 
     useEffect(() => {
         const getUserList = async () => {
             try {
                 const res = await axios.get("http://localhost:9095/api/messages");
-                console.log("Danh sách user:", res.data);
-
+                
                 return res.data;
             } catch (error) {
                 console.error("Lỗi khi tải danh sách user", error);
@@ -42,7 +42,7 @@ export default function Consult() {
         getUserList().then((data) => {
             setUsers(data);
         });
-    }, []);
+    }, [users]);
 
     useEffect(() => {
         // Kết nối WebSocket
@@ -55,9 +55,21 @@ export default function Consult() {
 
                 // Subscribe để nhận tin nhắn mới
                 client.subscribe("/topic/messages", (msg) => {
-                    console.log("📥 Nhận: " + msg.body);
+
+                    // const receivedMessage = JSON.parse(msg.body);
+                    // console.log("📩 New message:", receivedMessage);
+                    // if (selectedUser && receivedMessage.senderId === selectedUser.id) {
+                    //     setMessageList(prev => [...prev, JSON.parse(msg.body)]);
+                    // }
                     setMessageList(prev => [...prev, JSON.parse(msg.body)]);
                 });
+
+                // Subscribe to online users list topic (danh sách người dùng)
+                client.subscribe(`/topic/online-users`, (msg) => {
+                    console.log("👥 Online users:", msg.body);
+                    setUsersOnline(JSON.parse(msg.body));
+                });
+
             },
             onStompError: (frame) => {
                 console.error("❌ STOMP Error:", frame.headers['message']);
@@ -94,8 +106,6 @@ export default function Consult() {
             },
             content: newMessage
         };
-
-        console.log("📤 Gửi tin nhắn:", newMessageObj);
         setSelectedUser({ ...selectedUser, messages: [...selectedUser.messages, newMessageObj] });
 
         stompClient.publish({
@@ -104,7 +114,6 @@ export default function Consult() {
         });
         setNewMessage("");
     }
-    console.log(messageList)
 
     const fileInputRef = useRef(null);
 
@@ -119,7 +128,7 @@ export default function Consult() {
         }
     };
 
-    useEffect(() => {        
+    useEffect(() => {
     }, [selectedUser]);
 
     return (
