@@ -21,18 +21,28 @@ const initialMessages = {
 export default function Consult() {
 
     const [users, setUsers] = useState([]);
-    const [selectedUser, setSelectedUser] = useState(null);
     const [newMessage, setNewMessage] = useState("");
     const [stompClient, setStompClient] = useState(null);
     const [messageSend, setMessageSend] = useState(false);
     const [messageList, setMessageList] = useState([]);
     const [usersOnline, setUsersOnline] = useState([]);
+    const [noReadMessage, setNoReadMessage] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+
+    const getInfoNewUser = async (userId) => {
+        try {
+            const response = await axios.get(`http://localhost:9095/api/messages/${userId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Lỗi lấy thông tin user", error);
+        }
+    };
 
     useEffect(() => {
         const getUserList = async () => {
             try {
                 const res = await axios.get("http://localhost:9095/api/messages");
-                
+
                 return res.data;
             } catch (error) {
                 console.error("Lỗi khi tải danh sách user", error);
@@ -42,7 +52,7 @@ export default function Consult() {
         getUserList().then((data) => {
             setUsers(data);
         });
-    }, [users]);
+    }, [usersOnline, noReadMessage, messageList]);
 
     useEffect(() => {
         // Kết nối WebSocket
@@ -56,12 +66,20 @@ export default function Consult() {
                 // Subscribe để nhận tin nhắn mới
                 client.subscribe("/topic/messages", (msg) => {
 
-                    // const receivedMessage = JSON.parse(msg.body);
-                    // console.log("📩 New message:", receivedMessage);
-                    // if (selectedUser && receivedMessage.senderId === selectedUser.id) {
-                    //     setMessageList(prev => [...prev, JSON.parse(msg.body)]);
-                    // }
-                    setMessageList(prev => [...prev, JSON.parse(msg.body)]);
+                    const receivedMessage = JSON.parse(msg.body);
+
+                    if (selectedUser && receivedMessage.senderId === selectedUser.id) {
+                        setMessageList(prev => [...prev, JSON.parse(msg.body)]);
+                    }
+                    else {
+                        const userExists = users.find((u) => u.id === receivedMessage.senderId);
+                        if (userExists === null) {
+                            const newUser = getInfoNewUser(receivedMessage.senderId);
+                            setUsers([...users, newUser]);
+                        }
+                        setNoReadMessage(prev => [...prev, receivedMessage.senderId]);
+                    }
+                    // setMessageList(prev => [...prev, JSON.parse(msg.body)]);
                 });
 
                 // Subscribe to online users list topic (danh sách người dùng)
@@ -88,7 +106,7 @@ export default function Consult() {
         setStompClient(client);
 
         return () => client.deactivate();
-    }, []);
+    }, [selectedUser]);
 
     const sendMessage = () => {
         if (!newMessage.trim() || !stompClient || !stompClient.connected) {
@@ -107,6 +125,7 @@ export default function Consult() {
             content: newMessage
         };
         setSelectedUser({ ...selectedUser, messages: [...selectedUser.messages, newMessageObj] });
+        setMessageList([...messageList, newMessageObj]);
 
         stompClient.publish({
             destination: "/app/chat",
@@ -131,6 +150,12 @@ export default function Consult() {
     useEffect(() => {
     }, [selectedUser]);
 
+    const handleClickUser = (user) => {
+        setMessageList(user.messages);
+        setSelectedUser(user);
+        setNoReadMessage(prev => prev.filter((id) => id !== user.id));
+    }
+
     return (
         users && (
             <div className="h-screen flex flex-col bg-gray-100">
@@ -148,47 +173,70 @@ export default function Consult() {
                     </div>
                 </div>
                 {/* Main Chat Section */}
-                <div className="flex flex-1 mt-[80px]">
-                    <div className="w-1/4 bg-white border-r p-4 h-full overflow-y-auto">
-                        {users.map((user, index) => (
-                            <button className="w-full" key={index} onClick={() => {
-                                setSelectedUser(user);
-                                setMessageList(user.messages);
-                            }}>
-                                <div className={`p-2 ${user.id === selectedUser?.id ? "bg-blue-300" : "bg-gray-200"} rounded-lg m-2 text-start`}>
-                                    <span className=" ml-5">{user.username}</span>
+                {/* Main Content */}
+                <div className="flex flex-1 mt-[80px] h-[calc(100vh-80px)]">
+                    {/* Danh sách user */}
+                    <div className="w-1/4 bg-white border-r p-4 overflow-y-auto h-full">
+                        {users.map((u, index) => (
+                            <button className="w-full" key={index} onClick={() => handleClickUser(u)}>
+                                <div className={`${u.id === selectedUser?.id ? "bg-blue-300" : "bg-gray-200"} rounded-lg m-2 h-[55px] pl-2 pr-2 flex flex-col justify-center`}>
+                                    <div className={`justify-between items-center flex`}>
+                                        <div className="flex items-center">
+                                            {usersOnline.includes(u.id) && (
+                                                <div className="w-[10px] h-[10px] bg-green-500 rounded-full"></div>
+                                            )}
+                                            <span className="ml-5">{u.username}</span>
+                                        </div>
+                                        {noReadMessage.includes(u.id) && (
+                                            <div className="w-[10px] h-[10px] bg-red-500 rounded-full"></div>
+                                        )}
+                                    </div>
+                                    <div className="flex items-center text-gray-400 pl-5 pr-3 text-sm">
+                                        {
+                                            u.messages && u.messages[u.messages.length - 1].senderId === 0 && (
+                                                <span>Bạn: </span>
+
+                                            )
+                                        }
+                                        {
+                                            u.messages && (
+                                                <span className={`${u.messages[u.messages.length - 1].senderId === 0 ? "pl-2" : "pl-0"} w-full truncate text-start`}>{u.messages[u.messages.length - 1].content}</span>
+                                            )
+                                        }
+                                    </div>
                                 </div>
                             </button>
                         ))}
                     </div>
 
-                    <div className="flex-1 flex flex-col p-4 bg-gray-50">
-                        <div className="flex flex-col space-y-2 h-[calc(100%-100px)] overflow-y-auto mb-[100px]">
+                    {/* Khung chat */}
+                    <div className="w-3/4 flex flex-col bg-gray-50 h-full">
+                        {/* Tin nhắn */}
+                        <div className="flex-1 flex flex-col space-y-2 overflow-y-auto p-4">
                             {messageList.map((msg, index) => (
-                                <div key={index} className={`flex ${(msg.senderId === selectedUser.id) ? "justify-start" : "justify-end"}`}>
-                                    <div className={`${(msg.senderId === selectedUser.id) ? "bg-gray-300" : "bg-blue-600 text-white"} px-4 py-2 rounded-lg max-w-xs`}>
+                                <div key={index} className={`flex ${(msg.senderId === selectedUser?.id) ? "justify-start" : "justify-end"}`}>
+                                    <div className={`${(msg.senderId === selectedUser?.id) ? "bg-gray-300" : "bg-blue-600 text-white"} px-4 py-2 rounded-lg max-w-xs`}>
                                         <p>{msg.content}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
 
-                        {
-                            selectedUser && (
-                                <div className="fixed bottom-0 right-0 w-3/4 bg-white border-t flex items-center p-4">
-                                    <input
-                                        type="text"
-                                        placeholder="Nhập tin nhắn..."
-                                        className="flex-1 p-2 border rounded-lg mx-2"
-                                        value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)}
-                                    />
-                                    <button onClick={sendMessage}>
-                                        <FontAwesomeIcon icon={faPaperPlane} size="lg" className="text-blue-600" />
-                                    </button>
-                                </div>
-                            )
-                        }
+                        {/* Khung nhập tin nhắn */}
+                        {selectedUser && (
+                            <div className="w-full bg-white border-t flex items-center p-4">
+                                <input
+                                    type="text"
+                                    placeholder="Nhập tin nhắn..."
+                                    className="flex-1 p-2 border rounded-lg mx-2"
+                                    value={newMessage}
+                                    onChange={(e) => setNewMessage(e.target.value)}
+                                />
+                                <button onClick={sendMessage}>
+                                    <FontAwesomeIcon icon={faPaperPlane} size="lg" className="text-blue-600" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 
