@@ -31,7 +31,7 @@ export default function Consult() {
 
     const getInfoNewUser = async (userId) => {
         try {
-            const response = await axios.get(`http://localhost:9095/api/messages/${userId}`);
+            const response = await axios.get(`http://localhost:9097/api/v1/messages/${userId}`);
             return response.data;
         } catch (error) {
             console.error("Lỗi lấy thông tin user", error);
@@ -41,7 +41,7 @@ export default function Consult() {
     useEffect(() => {
         const getUserList = async () => {
             try {
-                const res = await axios.get("http://localhost:9095/api/messages");
+                const res = await axios.get("http://localhost:9097/api/v1/messages");
 
                 return res.data;
             } catch (error) {
@@ -56,7 +56,7 @@ export default function Consult() {
 
     useEffect(() => {
         // Kết nối WebSocket
-        const socket = new SockJS("http://localhost:9095/ws");
+        const socket = new SockJS("http://localhost:9097/api/v1/chat/ws");
         const client = new Client({
             webSocketFactory: () => socket,
             reconnectDelay: 5000,
