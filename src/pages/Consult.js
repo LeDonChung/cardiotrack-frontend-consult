@@ -4,6 +4,13 @@ import SockJS from "sockjs-client";
 import axios from "axios";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPaperPlane, faPaperclip, faXmark } from "@fortawesome/free-solid-svg-icons";
+import LightGallery from 'lightgallery/react';
+import 'lightgallery/css/lightgallery.css';
+import 'lightgallery/css/lg-zoom.css';
+import 'lightgallery/css/lg-thumbnail.css';
+import lgZoom from 'lightgallery/plugins/zoom';
+import lgThumbnail from 'lightgallery/plugins/thumbnail';
+import lgVideo from "lightgallery/plugins/video";
 
 
 const initialMessages = {
@@ -28,6 +35,13 @@ export default function Consult() {
     const [usersOnline, setUsersOnline] = useState([]);
     const [noReadMessage, setNoReadMessage] = useState([]);
     const [selectedUser, setSelectedUser] = useState(null);
+    const imageInputRef = useRef(null);
+
+    const bottomRef = useRef(null);
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [messageList]);
 
     const getInfoNewUser = async (userId) => {
         try {
@@ -64,8 +78,7 @@ export default function Consult() {
                 console.log("WebSocket Connected");
 
                 // Subscribe để nhận tin nhắn mới
-                client.subscribe("/topic/messages", (msg) => {
-
+                client.subscribe("/topic/messages", (msg) => {                  
                     const receivedMessage = JSON.parse(msg.body);
 
                     if (selectedUser && receivedMessage.senderId === selectedUser.id) {
@@ -108,6 +121,58 @@ export default function Consult() {
         return () => client.deactivate();
     }, [selectedUser]);
 
+    const handleImageUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'video/mp4'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('Chỉ chấp nhận file ảnh (PNG, JPEG, GIF, MP4)');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await axios.post("http://localhost:9097/api/v1/s3/upload-image", formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+
+            const image = response.data;
+            const newMessageObj = {
+                sender: {
+                    id: 0,
+                },
+                receiver: {
+                    id: selectedUser.id,
+                    username: selectedUser.fullName,
+                },
+                imageUrl: image,
+                timestamp: new Date().toISOString()
+            };
+
+            if (!stompClient || !stompClient.connected) {
+                console.error("🚨 Không thể gửi tin nhắn! WebSocket chưa kết nối.");
+                return;
+            }
+
+            setSelectedUser({ ...selectedUser, messages: [...selectedUser.messages, newMessageObj] });
+            setMessageList([...messageList, newMessageObj]);
+
+            stompClient.publish({
+                destination: "/app/chat",
+                body: JSON.stringify(newMessageObj)
+            });
+
+        } catch (error) {
+            console.error("❌ Upload failed:", error);
+            alert("Lỗi upload");
+        }
+    };
+
     const sendMessage = () => {
         if (!newMessage.trim() || !stompClient || !stompClient.connected) {
             console.error("🚨 Không thể gửi tin nhắn! WebSocket chưa kết nối.");
@@ -122,7 +187,8 @@ export default function Consult() {
                 id: selectedUser.id,
                 username: selectedUser.fullName,
             },
-            content: newMessage
+            content: newMessage,
+            timestamp: new Date().toISOString()
         };
         setSelectedUser({ ...selectedUser, messages: [...selectedUser.messages, newMessageObj] });
         setMessageList([...messageList, newMessageObj]);
@@ -200,7 +266,7 @@ export default function Consult() {
                                         }
                                         {
                                             u.messages && (
-                                                <span className={`${u.messages[u.messages.length - 1].senderId === 0 ? "pl-2" : "pl-0"} w-full truncate text-start`}>{u.messages[u.messages.length - 1].content}</span>
+                                                <span className={`${u.messages[u.messages.length - 1].senderId === 0 ? "pl-2" : "pl-0"} w-full truncate text-start`}>{u.messages[u.messages.length - 1].content ? u.messages[u.messages.length - 1].content : '[Hình ảnh]'}</span>
                                             )
                                         }
                                     </div>
@@ -213,18 +279,83 @@ export default function Consult() {
                     <div className="w-3/4 flex flex-col bg-gray-50 h-full">
                         {/* Tin nhắn */}
                         <div className="flex-1 flex flex-col space-y-2 overflow-y-auto p-4">
-                            {messageList.map((msg, index) => (
-                                <div key={index} className={`flex ${(msg.senderId === selectedUser?.id) ? "justify-start" : "justify-end"}`}>
-                                    <div className={`${(msg.senderId === selectedUser?.id) ? "bg-gray-300" : "bg-blue-600 text-white"} px-4 py-2 rounded-lg max-w-xs`}>
-                                        <p>{msg.content}</p>
+                            {messageList.map((msg, index) => {
+                                const currentMessageTime = new Date(msg.timestamp);
+                                const nextMessage = index < messageList.length - 1 ? messageList[index + 1] : null;
+                                const nextMessageTime = nextMessage ? new Date(nextMessage.timestamp) : null;
+                                const nextMessageSenderId = nextMessage ? nextMessage.senderId : null;
+
+                                // Check if the next message is from the same sender and within the same minute
+                                const isLastMessageInMinute = !(nextMessageSenderId === msg.senderId &&
+                                    nextMessageTime &&
+                                    currentMessageTime.getMinutes() === nextMessageTime.getMinutes() &&
+                                    currentMessageTime.getHours() === nextMessageTime.getHours());
+
+                                return (
+                                    <div key={index} className={`flex ${(msg.senderId === selectedUser?.id) ? "justify-start" : "justify-end"}`}>
+                                        <div className={`${(msg.imageUrl ? "bg-none" : (msg.senderId === selectedUser?.id) ? "bg-gray-300" : "bg-blue-600 text-white")} px-4 py-2 rounded-lg max-w-xs`}>
+                                            {msg.content && <p>{msg.content}</p>}
+                                            {msg.imageUrl && (
+                                                <LightGallery plugins={[lgZoom, lgThumbnail, lgVideo]} mode="lg-fade">
+                                                    {(() => {
+                                                        const isVideo = msg.imageUrl.includes('.mp4') || msg.imageUrl.includes('.mov') || msg.imageUrl.includes('.avi'); 
+                                                        const mediaClass = 'max-w-full max-h-96 cursor-pointer object-cover rounded-lg'; 
+
+                                                        return (
+                                                            !isVideo ? (
+                                                                <a href={msg.imageUrl}>
+                                                                    <img src={msg.imageUrl} alt="Hình ảnh" className={mediaClass} />
+                                                                </a>
+                                                            ) : (
+                                                                <a href={msg.imageUrl} data-lg-size="1280-720">
+                                                                    <video src={msg.imageUrl} controls className={mediaClass} />
+                                                                </a>
+                                                            )
+                                                        );
+                                                    })()}
+                                                </LightGallery>
+                                            )}
+
+                                            {isLastMessageInMinute && (
+                                                <span className={`text-xs ${msg.imageUrl ? "text-gray-500" : (msg.senderId === selectedUser?.id) ? "text-gray-500" : "text-white"}`}>
+                                                    {currentMessageTime.toLocaleString("en-US", {
+                                                        year: "numeric",
+                                                        month: "2-digit",
+                                                        day: "2-digit",
+                                                        hour: "2-digit",
+                                                        minute: "2-digit",
+                                                        hour12: true
+                                                    })}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
+                            <div ref={bottomRef} />
                         </div>
+
+
+
 
                         {/* Khung nhập tin nhắn */}
                         {selectedUser && (
                             <div className="w-full bg-white border-t flex items-center p-4">
+                                <button
+                                    onClick={() => imageInputRef.current.click()}
+                                    title="Chọn ảnh"
+                                    type="button" className="p-2 rounded-full  hover:bg-gray-300">
+                                    <svg className='mx-auto' width="30" height="30" viewBox="-5 -2 30 25" xmlns="http://www.w3.org/2000/svg" fill="none">
+                                        <path d="M3.15789 0H16.8421C17.6796 0 18.4829 0.332706 19.0751 0.924926C19.6673 1.51715 20 2.32037 20 3.15789V16.8421C20 17.6796 19.6673 18.4829 19.0751 19.0751C18.4829 19.6673 17.6796 20 16.8421 20H3.15789C2.32037 20 1.51715 19.6673 0.924926 19.0751C0.332706 18.4829 0 17.6796 0 16.8421V3.15789C0 2.32037 0.332706 1.51715 0.924926 0.924926C1.51715 0.332706 2.32037 0 3.15789 0ZM3.15789 1.05263C2.59954 1.05263 2.06406 1.27444 1.66925 1.66925C1.27444 2.06406 1.05263 2.59954 1.05263 3.15789V15.3579L5.56842 10.8316L8.2 13.4632L13.4632 8.2L18.9474 13.6842V3.15789C18.9474 2.59954 18.7256 2.06406 18.3308 1.66925C17.9359 1.27444 17.4005 1.05263 16.8421 1.05263H3.15789ZM8.2 14.9579L5.56842 12.3263L1.05263 16.8421C1.05263 17.4005 1.27444 17.9359 1.66925 18.3308C2.06406 18.7256 2.59954 18.9474 3.15789 18.9474H16.8421C17.4005 18.9474 17.9359 18.7256 18.3308 18.3308C18.7256 17.9359 18.9474 17.4005 18.9474 16.8421V15.1684L13.4632 9.69474L8.2 14.9579ZM5.78947 3.15789C6.48741 3.15789 7.15676 3.43515 7.65028 3.92867C8.1438 4.42218 8.42105 5.09154 8.42105 5.78947C8.42105 6.48741 8.1438 7.15676 7.65028 7.65028C7.15676 8.1438 6.48741 8.42105 5.78947 8.42105C5.09154 8.42105 4.42218 8.1438 3.92867 7.65028C3.43515 7.15676 3.15789 6.48741 3.15789 5.78947C3.15789 5.09154 3.43515 4.42218 3.92867 3.92867C4.42218 3.43515 5.09154 3.15789 5.78947 3.15789ZM5.78947 4.21053C5.37071 4.21053 4.9691 4.37688 4.67299 4.67299C4.37688 4.9691 4.21053 5.37071 4.21053 5.78947C4.21053 6.20824 4.37688 6.60985 4.67299 6.90596C4.9691 7.20207 5.37071 7.36842 5.78947 7.36842C6.20824 7.36842 6.60985 7.20207 6.90596 6.90596C7.20207 6.60985 7.36842 6.20824 7.36842 5.78947C7.36842 5.37071 7.20207 4.9691 6.90596 4.67299C6.60985 4.37688 6.20824 4.21053 5.78947 4.21053Z" fill="black" />
+                                    </svg>
+                                    <input
+                                        type="file"
+                                        ref={imageInputRef}
+                                        accept="image/png, image/jpeg, image/gif, video/mp4"
+                                        onChange={handleImageUpload}
+                                        hidden
+                                    />
+                                </button>
                                 <input
                                     type="text"
                                     placeholder="Nhập tin nhắn..."
