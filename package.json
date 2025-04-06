@@ -20,7 +20,9 @@
     "redux": "^5.0.1",
     "redux-thunk": "^3.1.0",
     "sockjs-client": "^1.6.1",
-    "web-vitals": "^4.2.4"
+    "web-vitals": "^4.2.4",
+    "lightgallery": "^2.8.3",
+    "emoji-picker-react": "^4.12.2"
   },
   "scripts": {
     "start": "cross-env PORT=3001 react-scripts start",
