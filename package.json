@@ -3,14 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.7.2",
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
-    "@fortawesome/free-brands-svg-icons": "^6.7.2",
-    "@fortawesome/free-regular-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@reduxjs/toolkit": "^2.5.0",
     "@stomp/stompjs": "^7.0.0",
-    "axios": "^1.8.2",
+    "axios": "^1.7.9",
     "cra-template": "1.2.0",
     "dotenv": "^16.4.7",
     "react": "^19.0.0",
@@ -22,10 +21,12 @@
     "sockjs-client": "^1.6.1",
     "web-vitals": "^4.2.4",
     "lightgallery": "^2.8.3",
+    "react-toastify": "^11.0.3",
+    "jwt-decode": "^3.1.2",
     "emoji-picker-react": "^4.12.2"
   },
   "scripts": {
-    "start": "cross-env PORT=3001 react-scripts start",
+    "start": "cross-env PORT=3000 react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
