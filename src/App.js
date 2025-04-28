@@ -1,16 +1,23 @@
 import React from 'react';
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import './App.css';
 import Consult from './pages/Consult';
+import { Login } from './pages/Login';
 
 function App() {
   return (
-    <Router>
-        <Routes>
-          <Route path='/Consult' element={<Consult/>}>
-          </Route>
-        </Routes>
-    </Router>
+    <BrowserRouter
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}>
+      <Routes>
+        <Route path='/' element={<Navigate to='/login' />} />
+        <Route path='/login' element={<Login />} />
+        <Route path='/Consult' element={<Consult />} />
+        <Route path="*" element={<h1>404 - Page Not Found</h1>} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
