@@ -45,7 +45,7 @@ export default function Consult() {
 
     const getInfoNewUser = async (userId) => {
         try {
-            const response = await axios.get(`http://localhost:9097/api/v1/messages/${userId}`);
+            const response = await axios.get(`${process.env.REACT_APP_API_URL}/chat/api/v1/messages/${userId}`);
             return response.data;
         } catch (error) {
             console.error("Lỗi lấy thông tin user", error);
@@ -55,7 +55,7 @@ export default function Consult() {
     useEffect(() => {
         const getUserList = async () => {
             try {
-                const res = await axios.get("http://localhost:9097/api/v1/messages");
+                const res = await axios.get(`${process.env.REACT_APP_API_URL}/chat/api/v1/messages`);
 
                 return res.data;
             } catch (error) {
@@ -70,7 +70,7 @@ export default function Consult() {
 
     useEffect(() => {
         // Kết nối WebSocket
-        const socket = new SockJS("http://localhost:9097/api/v1/chat/ws");
+        const socket = new SockJS(`${process.env.REACT_APP_API_URL}/chat/api/v1/chat/ws`);
         const client = new Client({
             webSocketFactory: () => socket,
             reconnectDelay: 5000,
@@ -135,7 +135,7 @@ export default function Consult() {
         formData.append("file", file);
 
         try {
-            const response = await axios.post("http://localhost:9097/api/v1/s3/upload-image", formData, {
+            const response = await axios.post(`${process.env.REACT_APP_API_URL}/chat/api/v1/s3/upload-image`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data'
                 }
